@@ -375,7 +375,7 @@ def fix_BMS(abd, hyb, PN):
         
         tp1, W_NR, trans, idx = PNBMS.PN_BMS_w_time_phase(abd, W_PN, W_PN_PsiM, hyb.t_start, hyb.t_start+hyb.length, None)
         
-    return W_NR, trans
+    return W_NR
 
 
 def fix_BMS_NRNR(abd, abd2, hyb, PN):    
