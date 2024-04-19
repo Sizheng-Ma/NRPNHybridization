@@ -750,7 +750,88 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
     else:
         return W_NR, W_PN
 
+#@profile
+def MyHybridize(cce_dir, hyb, PN, OptimizePNParas = 0, truncate = None, verbose = False):
+    """
+    Align and hybridize given NR waveform with PN waveform.
+    """   
     
+    abd, t0 = get_abd(cce_dir, truncate)
+    
+    # BMS tranformations
+    W_NR = fix_BMS(abd, hyb, PN)
+    if verbose:
+        print("After BMS")
+    
+    # Get matching window
+    hyb.get_window_NR(W_NR)
+
+ 
+    # Optimize parameters
+    if hyb.PNIter == 0:
+        PN.Parameterize_to_Physical(hyb)
+    else:
+        PN.Physical_to_Parameterize(hyb)
+
+    if OptimizePNParas:
+        if verbose:
+            print("Starting OptimizePNParas")
+        minima, W_PN, chiA, chiB = Align(PN, hyb)
+        if verbose:
+            print("After Align")
+        logR_delta = np.append(minima.x[0], minima.x[1:] + hyb.omega_mean*minima.x[0]/2)
+        if len(PN.PhyParas) == 12:
+            PN.PhyParas[8:] = logR_delta
+        else:
+            PN.PhyParas = np.append(PN.PhyParas, logR_delta)
+        PN.Physical_to_Parameterize(hyb)
+        
+        scale = np.array([0.05,0.02,0.1,0.1,np.pi*2,np.pi*2,np.pi,np.pi/4,np.pi/hyb.omega_i/2.0,np.pi/4,np.pi/4,np.pi/4])
+        if np.linalg.norm(PN.chi1_i)<1e-4 or np.linalg.norm(PN.chi2_i)<1e-4:
+            scale[7] = 1e-5
+            if np.linalg.norm(PN.chi1_i)<1e-4:
+                scale[2] = 1e-5
+            if np.linalg.norm(PN.chi2_i)<1e-4:
+                scale[3] = 1e-5
+        lowbound12D = PN.OptParas - scale
+        upbound12D = PN.OptParas + scale
+
+        minima12D = least_squares(Optimize12D, PN.OptParas, bounds=(lowbound12D, upbound12D), ftol=3e-15, xtol=3e-15, gtol=3e-15, x_scale='jac', args=(PN, hyb))
+        if verbose:
+            print("Minimizing")
+        minima12D.jac = approx_fprime(minima12D.x, Optimize12D, np.full_like(minima12D.x, 1.49e-8), PN, hyb)
+        if minima12D.success == False:
+            print("12-D Optimization doesn't converge.")
+            
+        PN.OptParas = minima12D.x
+        PN.Parameterize_to_Physical(hyb)
+    
+    
+    if verbose:
+        print("After optimal")
+    # Get aligned NR and PN waveforms
+    hyb.t_PNStart, hyb.t_PNEnd = -8000, 1000 - hyb.t_start
+    minima, W_PN, chiA, chiB = Align(PN, hyb)
+    
+    t_delta = minima.x[0]
+    logR_delta = np.append(0.0, minima.x[1:] + hyb.omega_mean*minima.x[0]/2)
+    if len(PN.PhyParas) == 12:
+        PN.PhyParas[8] = t_delta
+        PN.PhyParas[9:] = logR_delta[1:]
+    else:
+        PN.PhyParas = np.append(PN.PhyParas, logR_delta)
+    PN.Physical_to_Parameterize(hyb)
+    R_delta = np.exp(quaternion.from_float_array(logR_delta))
+    
+    W_PN.t = W_PN.t - t_delta
+    W_NR = scri.rotate_physical_system(W_NR, R_delta)
+    chiA = R_delta*chiA*R_delta.conjugate()
+    chiB = R_delta*chiB*R_delta.conjugate()
+
+    print("SquaredError over matching window: ",SquaredError(W_NR, W_PN, hyb.t_start, hyb.t_start + hyb.length))
+    
+    return W_NR, W_PN, minima12D
+  
 ## Run the code
 #import os
 #import argparse
