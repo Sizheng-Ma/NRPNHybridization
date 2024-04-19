@@ -273,12 +273,12 @@ def get_abd(cce_dir, truncate):
     """
     abd = scri.SpEC.create_abd_from_h5(
         "CCE",
-        h = cce_dir + '/Strain.h5',
-        Psi4 = cce_dir + '/Psi4.h5',
-        Psi3 = cce_dir + '/Psi3.h5',
-        Psi2 = cce_dir + '/Psi2.h5',
-        Psi1 = cce_dir + '/Psi1.h5',
-        Psi0 = cce_dir + '/Psi0.h5')
+        h = cce_dir + '/extracStrain.h5',
+        Psi4 = cce_dir + '/extracPsi4.h5',
+        Psi3 = cce_dir + '/extracPsi3.h5',
+        Psi2 = cce_dir + '/extracPsi2.h5',
+        Psi1 = cce_dir + '/extracPsi1.h5',
+        Psi0 = cce_dir + '/extracPsi0.h5')
     t0 = -abd.t[np.argmax(np.linalg.norm(abd.sigma.bar, axis=1))]
     abd.t = abd.t + t0
  
@@ -751,72 +751,72 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
         return W_NR, W_PN
 
     
-# Run the code
-import os
-import argparse
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--WaveformType', default='cce',help='cce for CCE waveform, and extrapolated for extrapolated waveform')
-parser.add_argument('--t',type=float, default=-7000.0,help='End time of matching window')
-parser.add_argument('--SimDir', default='/panfs/ds09/sxs/dzsun/SimAnnex/Public/HybTest/015/Lev3',help='Path in which to find the extropolated waveform data')
-parser.add_argument('--CCEDir', default='/home/dzsun/CCEAnnex/Public/HybTest/015_CCE/Lev3/CCE',help='Path in which to find the CCE waveform data')
-parser.add_argument('--OutName', default='Output.npz',help='Path in which to output results')
-parser.add_argument('--length',type=float, default=5000.0,help='Length of matching window')
-parser.add_argument('--nOrbits',type=float, default=None,help='Length of matching window in orbits, will disable "length" option if not None')
-parser.add_argument('--truncate',nargs=2,type=float, default=None,help='--truncate t1 t2. If specified, it will truncate the abd object and keep only data between t1 and t2')
-parser.add_argument('--CCEDir2', default=None,help='Path in which to find the second CCE waveform data')
-args = vars(parser.parse_args())
-
-
-clock_start = time.time()
-WaveformType = args['WaveformType']
-t_end = args['t']
-data_dir = args['SimDir']
-cce_dir = args['CCEDir']
-cce_dir2 = args['CCEDir2']
-out_name = args['OutName']
-length = np.array(args['length'])
-nOrbits = args['nOrbits']
-truncate = args['truncate']
-OptArg = 1
-maxiter = 30
-
-if WaveformType == 'cce':
-    abd, t0 = get_abd(cce_dir, truncate)
-    if nOrbits != None:
-        length = get_length_from_abd(abd, nOrbits, t_end)
-else:
-    W_NR, t0, length = get_extrapolated_NR(data_dir, nOrbits, t_end, length)
-    maxiter = 0
-if cce_dir2 != None:
-    maxiter = 0
-    
-hyb = hyb_quantites(t_end, length)
-PN = PNParameters(data_dir, hyb, t0)
-if os.path.exists(out_name):
-    Checkpoint = np.load(out_name, allow_pickle=True)
-    hyb.PNIter = Checkpoint['checkpoint'][0]
-    hyb.cost = Checkpoint['checkpoint'][1]
-    hyb.omega_i = Checkpoint['checkpoint'][2]
-    hyb.t_start = Checkpoint['checkpoint'][3]
-    hyb.length = Checkpoint['checkpoint'][4]
-    hyb.t_PNStart = Checkpoint['checkpoint'][5]
-    hyb.t_PNEnd = Checkpoint['checkpoint'][6]
-    PN.frame_i = Checkpoint['checkpoint'][7]
-    PN.OptParas = Checkpoint['OptParas']
-    PN.PhyParas = Checkpoint['PhyParas']
-    
-if hyb.PNIter>maxiter:
-    hyb.PNIter = 10
-while hyb.PNIter<=maxiter:
-    print("PNIter=: ", hyb.PNIter)
-    W_NR, W_PN, W_H, minima12D = Hybridize(WaveformType, t_end, data_dir, cce_dir, out_name, length, nOrbits, hyb, PN, debug=0, OptimizePNParas=OptArg, truncate=truncate, cce_dir2=cce_dir2)
-    
-    if hyb.PNIter >= 2 and abs(hyb.cost[-1]-hyb.cost[-2])/hyb.cost[-1]<1e-2 and abs(hyb.cost[-1]-hyb.cost[-3])/hyb.cost[-1]<1e-2:
-        hyb.PNIter = maxiter + 1
-    else:
-        hyb.PNIter += 1
-    
-# Output results 
-Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits)
-print("All done, total time:", time.time()-clock_start)
+## Run the code
+#import os
+#import argparse
+#
+#parser = argparse.ArgumentParser()
+#parser.add_argument('--WaveformType', default='cce',help='cce for CCE waveform, and extrapolated for extrapolated waveform')
+#parser.add_argument('--t',type=float, default=-7000.0,help='End time of matching window')
+#parser.add_argument('--SimDir', default='/panfs/ds09/sxs/dzsun/SimAnnex/Public/HybTest/015/Lev3',help='Path in which to find the extropolated waveform data')
+#parser.add_argument('--CCEDir', default='/home/dzsun/CCEAnnex/Public/HybTest/015_CCE/Lev3/CCE',help='Path in which to find the CCE waveform data')
+#parser.add_argument('--OutName', default='Output.npz',help='Path in which to output results')
+#parser.add_argument('--length',type=float, default=5000.0,help='Length of matching window')
+#parser.add_argument('--nOrbits',type=float, default=None,help='Length of matching window in orbits, will disable "length" option if not None')
+#parser.add_argument('--truncate',nargs=2,type=float, default=None,help='--truncate t1 t2. If specified, it will truncate the abd object and keep only data between t1 and t2')
+#parser.add_argument('--CCEDir2', default=None,help='Path in which to find the second CCE waveform data')
+#args = vars(parser.parse_args())
+#
+#
+#clock_start = time.time()
+#WaveformType = args['WaveformType']
+#t_end = args['t']
+#data_dir = args['SimDir']
+#cce_dir = args['CCEDir']
+#cce_dir2 = args['CCEDir2']
+#out_name = args['OutName']
+#length = np.array(args['length'])
+#nOrbits = args['nOrbits']
+#truncate = args['truncate']
+#OptArg = 1
+#maxiter = 30
+#
+#if WaveformType == 'cce':
+#    abd, t0 = get_abd(cce_dir, truncate)
+#    if nOrbits != None:
+#        length = get_length_from_abd(abd, nOrbits, t_end)
+#else:
+#    W_NR, t0, length = get_extrapolated_NR(data_dir, nOrbits, t_end, length)
+#    maxiter = 0
+#if cce_dir2 != None:
+#    maxiter = 0
+#    
+#hyb = hyb_quantites(t_end, length)
+#PN = PNParameters(data_dir, hyb, t0)
+#if os.path.exists(out_name):
+#    Checkpoint = np.load(out_name, allow_pickle=True)
+#    hyb.PNIter = Checkpoint['checkpoint'][0]
+#    hyb.cost = Checkpoint['checkpoint'][1]
+#    hyb.omega_i = Checkpoint['checkpoint'][2]
+#    hyb.t_start = Checkpoint['checkpoint'][3]
+#    hyb.length = Checkpoint['checkpoint'][4]
+#    hyb.t_PNStart = Checkpoint['checkpoint'][5]
+#    hyb.t_PNEnd = Checkpoint['checkpoint'][6]
+#    PN.frame_i = Checkpoint['checkpoint'][7]
+#    PN.OptParas = Checkpoint['OptParas']
+#    PN.PhyParas = Checkpoint['PhyParas']
+#    
+#if hyb.PNIter>maxiter:
+#    hyb.PNIter = 10
+#while hyb.PNIter<=maxiter:
+#    print("PNIter=: ", hyb.PNIter)
+#    W_NR, W_PN, W_H, minima12D = Hybridize(WaveformType, t_end, data_dir, cce_dir, out_name, length, nOrbits, hyb, PN, debug=0, OptimizePNParas=OptArg, truncate=truncate, cce_dir2=cce_dir2)
+#    
+#    if hyb.PNIter >= 2 and abs(hyb.cost[-1]-hyb.cost[-2])/hyb.cost[-1]<1e-2 and abs(hyb.cost[-1]-hyb.cost[-3])/hyb.cost[-1]<1e-2:
+#        hyb.PNIter = maxiter + 1
+#    else:
+#        hyb.PNIter += 1
+#    
+## Output results 
+#Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits)
+#print("All done, total time:", time.time()-clock_start)
