@@ -378,7 +378,7 @@ def fix_BMS(abd, hyb, PN):
         )
         W_PN_PsiM.t = W_PN_PsiM.t*Phys[1]
 
-        tp1, W_NR, trans, idx = PNBMS.PN_BMS_w_time_phase(abd, W_PN, W_PN_PsiM, hyb.t_start, hyb.t_start+hyb.length, None)
+        tp1, W_NR, trans, idx = PNBMS.PN_BMS_w_time_phase(abd, W_PN, W_PN_PsiM, hyb.t_start, hyb.t_start+hyb.length, None, N=1)
 
     return W_NR
 
