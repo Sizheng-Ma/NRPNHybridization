@@ -24,14 +24,14 @@ class SplineArray:
         if self.complex:
             y = y.view(dtype=float)
         self.splines = [Spline(x, y[:, i]) for i in range(y.shape[1])]
-        
+
     def __call__(self, xprime):
         yprime = np.concatenate([spl(xprime)[:, np.newaxis] for spl in self.splines], axis=1)
         if self.complex:
             yprime = yprime.view(dtype=complex)
         return yprime
-    
-    
+
+
 class hyb_quantites:
     def __init__(self, t_end, length):
         self.PNIter = 0
@@ -54,24 +54,24 @@ class hyb_quantites:
         self.omega_PN_spline = None
         self.omega_PN_mag_spline = None
         self.PNData_spline = None
-        
+
     def get_window_NR(self, W_NR):
         omega_NR = W_NR.angular_velocity()
         self.omega_NR_mag = np.linalg.norm(omega_NR, axis=1)
         omega_NR_mag = gaussian_filter(self.omega_NR_mag, sigma=100)
-        
+
         if W_NR.t[0]>=self.t_start-10 or W_NR.t[-1]<=self.t_start+10:
             message = ("t_start {0} should be much larger than the start time of NR"
                 +" waveform {1} and much smaller than the ending time {2}.")
             raise ValueError(message.format(self.omega_it_start, W_NR.t[0], W_NR.t[-1]))
         omega_0 = omega_NR_mag[(W_NR.t>=self.t_start-10)&(W_NR.t<=self.t_start+10)]
         self.omega_i = np.mean(omega_0)
-        
+
         if W_NR.t[0]>=self.t_start-2.0*np.pi/self.omega_i or W_NR.t[-1]<=self.t_start+2.0*np.pi/self.omega_i:
             message = ("t_start {0} should be at least {1} larger than the start time of NR waveform {2}"
                 +" and smaller than the ending time of NR waveform {3}.")
             raise ValueError(message.format(self.omega_it_start, 2.0*np.pi/self.omega_i, W_NR.t[0], W_NR.t[-1]))
-        
+
         self.matchingt = W_NR.t[(W_NR.t>=self.t_start)&(W_NR.t<=self.t_end)]
         self.omega_NR_mag_matching = omega_NR_mag[(W_NR.t>=self.t_start)&(W_NR.t<=self.t_end)]
         self.W_NR_matching_in = W_NR.interpolate(self.matchingt)
@@ -80,21 +80,21 @@ class hyb_quantites:
         self.omega_NR_hat = self.omega_NR_matching / np.linalg.norm(self.omega_NR_matching, axis=1)[:, np.newaxis]
         self.Normalization = np.sum(simpson(abs(self.W_NR_matching_in.data)**2.0, self.matchingt, axis=0))
         self.NormalizationOmega = simpson(np.linalg.norm(self.omega_NR_matching, axis=1), self.matchingt)
-        
+
     def get_window_PN(self, W_PN):
         omega_PN = W_PN.angular_velocity()
         self.omega_PN_spline = SplineArray(W_PN.t, omega_PN)
         omega_PN_mag = gaussian_filter(np.linalg.norm(omega_PN, axis=1),100)
         self.omega_PN_mag_spline = Spline(W_PN.t, omega_PN_mag)
         self.PNData_spline = SplineArray(W_PN.t, W_PN.data)
-        
-        
+
+
 class PNParameters:
     def __init__(self, data_dir, hyb, t0):
         self.xHat = quaternion.quaternion(0.0,1.0,0.0,0.0)
         self.yHat = quaternion.quaternion(0.0,0.0,1.0,0.0)
         self.zHat = quaternion.quaternion(0.0,0.0,0.0,1.0)
-    
+
         with h5py.File(data_dir+'/Horizons.h5', 'r') as f:
             tA = f['AhA.dir/CoordCenterInertial.dat'][:,0] + t0
             xA = f['AhA.dir/CoordCenterInertial.dat'][:,1:]
@@ -105,15 +105,15 @@ class PNParameters:
             chiB = f['AhB.dir/chiInertial.dat'][:,1:]
         self.i = abs(tA - hyb.t_start).argmin()
         self.tA = tA
-        
+
         m1 = mA[self.i]
         m2 = mB[self.i]
         self.q_i = m1/m2
         if m1 < m2:
             self.q_i = 1.0/self.q_i
-            
+
         self.M_i = m1 + m2
-        
+
         # calculate frame_i
         d = xA - xB
         nHat = np.empty((len(d),4))
@@ -132,28 +132,27 @@ class PNParameters:
             np.dot((Ra*self.yHat*Ra.inverse()).vec, lambdaHat[self.i].vec))
         self.frame_i = Ra*np.exp((beta)/2*self.xHat)  
         self.frame_i = quaternion.as_float_array(self.frame_i)
-        
+
         self.chiA = chiA
         self.chiB = chiB
         self.chi1_i = chiA[self.i]
         self.chi2_i = chiB[self.i]
-        
+
         self.OptParas = np.array([1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0])
         self.PhyParas = np.array([1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0])
-        
-        
+
     def rotate(self, trans):
         self.frame_i = quaternion.from_float_array(self.frame_i)
         self.frame_i = self.frame_i*quaternion.from_float_array(trans["transformations"]["frame_rotation"])
         self.frame_i = quaternion.as_float_array(self.frame_i)
-        
+
         chiA = quaternion.from_float_array(np.column_stack((0.0*self.tA, self.chiA)))
         chiB = quaternion.from_float_array(np.column_stack((0.0*self.tA, self.chiB)))
         chiA = quaternion.from_float_array(trans["transformations"]["frame_rotation"])*chiA*quaternion.from_float_array(trans["transformations"]["frame_rotation"]).inverse()
         chiB = quaternion.from_float_array(trans["transformations"]["frame_rotation"])*chiB*quaternion.from_float_array(trans["transformations"]["frame_rotation"]).inverse()
         self.chi1_i = chiA[self.i].vec
         self.chi2_i = chiB[self.i].vec
-        
+
     def Physical_to_Parameterize(self, hyb):
         """
         Reparameterize physical parameters x=[q, M, chi1_x, chi1_y, chi1_z, chi2_x, chi2_y, chi2_z, t_delta,
@@ -164,10 +163,10 @@ class PNParameters:
             message = ("Incorrect format for x={0}. x should be [q, M, chi1_x, chi1_y, chi1_z, chi2_x, chi2_y, chi2_z, t_delta,"
                 +"logR_delta_x, logR_delta_y, logR_delta_z], where the last four components are optional.")
             raise ValueError(message.format(x))
-            
+
         x_2 = np.linalg.norm(x[2:5])/np.linalg.norm(self.chi1_i)
         x_3 = np.linalg.norm(x[5:8])/np.linalg.norm(self.chi2_i)
-        
+
         if len(x) == 12:
             R_frame = np.exp(quaternion.quaternion(0.0,x[9],x[10],x[11]))
             rotation = quaternion.optimal_alignment_in_Euclidean_metric(
@@ -191,13 +190,13 @@ class PNParameters:
             angle = np.pi
         sign = np.sign(np.dot(chi1_hat,np.cross(chi2_i_proj, chi2_0_proj)))
         rotation = np.exp(sign*axis*angle/2)*rotation
-        
+
         if len(x) == 12:
             x_47 = (quaternion.as_float_array(np.log(rotation)))[1:]
         else:
             x_47 = (quaternion.as_float_array(np.log(rotation)))[1:]
         x_47[x_47>np.pi] = x_47[x_47>np.pi] - np.pi
-        
+
         if len(x) == 12:
             chi2_0 = x_3*(rotation*R_frame*quaternion.quaternion(0,self.chi2_i[0],self.chi2_i[1],self.chi2_i[2])*R_frame.conjugate()*rotation.conjugate()).vec
         else:
@@ -206,7 +205,7 @@ class PNParameters:
         x_7 = sign*np.arccos(np.dot(chi2_0, x[5:8])/(np.linalg.norm(x[5:8])*np.linalg.norm(chi2_0)))
         if np.dot(chi2_0,x[5:8])/(np.linalg.norm(x[5:8])*np.linalg.norm(chi2_0)) > 1:
             x_7 = 0.0
-            
+
         x[0] = x[0]/self.q_i
         x[1] = x[1]/self.M_i
         x[2] = x_2
@@ -217,7 +216,6 @@ class PNParameters:
             x[9:] = x[9:] - hyb.omega_mean*x[8]/2
         self.OptParas = x
 
-
     def Parameterize_to_Physical(self, hyb):
         """
         Output optimization parameters as physical quantities x=[q, M, chi1_x, chi1_y, chi1_z, chi2_x, chi2_y, chi2_z, t_delta,
@@ -227,10 +225,10 @@ class PNParameters:
         if len(x)!=12 and len(x)!=8:
             message = ("Incorrect format for x={0}")
             raise ValueError(message.format(x))
-            
+
         x[0] = x[0]*self.q_i
         x[1] = x[1]*self.M_i
-        
+
         chi1_0 = quaternion.quaternion(0,self.chi1_i[0],self.chi1_i[1],self.chi1_i[2])
         chi2_0 = quaternion.quaternion(0,self.chi2_i[0],self.chi2_i[1],self.chi2_i[2])
         rotation = np.exp(self.xHat*x[4] + self.yHat*x[5] + self.zHat*x[6])
@@ -246,11 +244,11 @@ class PNParameters:
         chi2_0 = (angle*chi2_0*angle.conjugate()).vec
         x[2:5] = chi1_0
         x[5:8] = chi2_0
-        
+
         if len(x) == 12:
             x[9:] = x[9:] + hyb.omega_mean*x[8]/2
         self.PhyParas = x
-    
+
 
 def get_extrapolated_NR(data_dir, nOrbits, t_end, length):
     W = scri.SpEC.read_from_h5(data_dir+'/rhOverM_Asymptotic_GeometricUnits_CoM.h5/Extrapolated_N4.dir')
@@ -265,8 +263,8 @@ def get_extrapolated_NR(data_dir, nOrbits, t_end, length):
         omega_mag = np.linalg.norm(omega, axis=1)
         length = nOrbits_to_length(nOrbits, t_end, omega_mag,W.t)
     return W, t0, length
-    
-    
+
+
 def get_abd(cce_dir, truncate):
     """
     Create AsymptoticBondiData from CCE data and apply truncation if required.
@@ -347,10 +345,17 @@ def get_length_from_abd(abd, nOrbits, t_end):
     return length
 
 
-#@profile
+# @profile
 def fix_BMS(abd, hyb, PN):    
     if hyb.PNIter == 0: 
-        abd_prime, trans, abd_err = abd.map_to_superrest_frame(t_0=hyb.t_start+hyb.length/2)
+        # abd_prime, trans, abd_err = abd.map_to_superrest_frame(t_0=hyb.t_start+hyb.length/2)
+        res = scri.bms_transformations.BMSTransformation()
+        res.from_file("full_bms.h5")
+        abd_prime = abd.transform(
+            supertranslation=res.supertranslation,
+            frame_rotation=res.frame_rotation.components,
+            boost_velocity=res.boost_velocity,
+        )
         W_NR = abd_to_WM(abd_prime)
         W_NR_corot = scri.to_corotating_frame(W_NR.copy())
         ZeroModes = [2,8,16,26,38,52,68]
@@ -366,15 +371,15 @@ def fix_BMS(abd, hyb, PN):
         W_PN.data = np.append(0.0*W_PN.data[:,0:4], np.copy(W_PN.data), axis=1)
         W_PN.ells = 0,8
         W_PN.dataType = scri.h
-        
+
         W_PN_PsiM = PostNewtonian.PNWaveform(
             Phys[0], np.copy(hyb.omega_i)*Phys[1], Phys[2:5], Phys[5:8], PN.frame_i, np.copy(hyb.t_start)/Phys[1],
             t_PNStart=hyb.t_PNStart, t_PNEnd=hyb.t_PNEnd, datatype="Psi_M"
         )
         W_PN_PsiM.t = W_PN_PsiM.t*Phys[1]
-        
+
         tp1, W_NR, trans, idx = PNBMS.PN_BMS_w_time_phase(abd, W_PN, W_PN_PsiM, hyb.t_start, hyb.t_start+hyb.length, None)
-        
+
     return W_NR
 
 
@@ -407,7 +412,7 @@ def Optimize4D(x, hyb):
     cost = temp - W_temp.data
     return np.array([cost.real, cost.imag]).flatten('F')/np.sqrt(np.sum(abs(temp)**2.0))
 
-    
+
 def SquaredError(W1, W2, t1, t2, mode=None):
     """
     Calculate the residue of W1 and W2 between t1 and t2.
@@ -575,24 +580,24 @@ def Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits):
     scri.SpEC.write_to_h5(W_PN, outname, file_write_mode='w')
     outname = 'hybrid.h5'
     scri.SpEC.write_to_h5(W_H, outname, file_write_mode='w')
-    
+
     ErrorMatchingWindow = SquaredError(W_NR, W_PN, hyb.t_start, hyb.t_start + hyb.length)   
     hyb.cost.append(ErrorMatchingWindow)
-    
+
     checkpoint = np.array([hyb.PNIter, hyb.cost, hyb.omega_i, hyb.t_start, hyb.length, hyb.t_PNStart, hyb.t_PNEnd, PN.frame_i], dtype="object")
-    
+
     t1 = hyb.t_end - nOrbits_to_length(25+nOrbits/2, hyb.t_end, hyb.omega_NR_mag, W_NR.t)
     length = nOrbits_to_length(10, t1, hyb.omega_NR_mag, W_NR.t)
     ErrorTestWindow = SquaredError(W_NR, W_PN, t1-length, t1)
     print('Test Window Error = ', ErrorTestWindow)
-    
+
     ModeError = []
     for i in range(len(W_NR.data[0,:])):
         ModeError.append(SquaredError(W_NR, W_PN, hyb.t_start, hyb.t_start + length, mode=i))
     print(ModeError)
-    
+
     var = StandardError(minima12D, PN)
-    
+
     change = []
     change.append(PN.PhyParas[:2]*(1 - 1/PN.OptParas[:2]))
     change.append(np.linalg.norm(PN.PhyParas[2:5])*(1 - 1/PN.OptParas[2]))
@@ -603,7 +608,7 @@ def Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits):
     change.append(np.linalg.norm(PN.PhyParas[5:8])/PN.OptParas[3]*var[3])
     change.append(var[7])
     change = np.array(change, dtype="object")
-    
+
     np.savez(
         out_name,
         checkpoint = checkpoint,
@@ -616,12 +621,12 @@ def Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits):
     )
 
 
-#@profile
+# @profile
 def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, hyb, PN, debug = 0, OptimizePNParas = 0, truncate = None, cce_dir2 = None):
     """
     Align and hybridize given NR waveform with PN waveform.
     """   
-    
+
     # Get NR waveform
     if WaveformType == 'cce':
         abd, t0 = get_abd(cce_dir, truncate)
@@ -630,21 +635,18 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
             OptimizePNParas = 0
     else:
         W_NR, t0, length = get_extrapolated_NR(data_dir, nOrbits, t_end, length)
-              
-    
+
     # BMS tranformations
     if WaveformType == 'cce':
         if cce_dir2 == None:
             W_NR, trans = fix_BMS(abd, hyb, PN)
-            #PN.rotate(trans)
+            # PN.rotate(trans)
         else:
             W_NR, W_NR2 = fix_BMS_NRNR(abd, abd2, hyb, PN)
 
-    
     # Get matching window
     hyb.get_window_NR(W_NR)
 
- 
     # Optimize parameters
     if hyb.PNIter == 0:
         PN.Parameterize_to_Physical(hyb)
@@ -659,7 +661,7 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
         else:
             PN.PhyParas = np.append(PN.PhyParas, logR_delta)
         PN.Physical_to_Parameterize(hyb)
-        
+
         scale = np.array([0.05,0.02,0.1,0.1,np.pi*2,np.pi*2,np.pi,np.pi/4,np.pi/hyb.omega_i/2.0,np.pi/4,np.pi/4,np.pi/4])
         if np.linalg.norm(PN.chi1_i)<1e-4 or np.linalg.norm(PN.chi2_i)<1e-4:
             scale[7] = 1e-5
@@ -674,18 +676,17 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
         minima12D.jac = approx_fprime(minima12D.x, Optimize12D, np.full_like(minima12D.x, 1.49e-8), PN, hyb)
         if minima12D.success == False:
             print("12-D Optimization doesn't converge.")
-            
+
         PN.OptParas = minima12D.x
         PN.Parameterize_to_Physical(hyb)
-    
-    
+
     # Get aligned NR and PN waveforms
     hyb.t_PNStart, hyb.t_PNEnd = -80000, 1000 - hyb.t_start
     if cce_dir2 != None:
         minima, W_PN, chiA, chiB = Align(PN, hyb, W_NR2)
     else:
         minima, W_PN, chiA, chiB = Align(PN, hyb)
-    
+
     t_delta = minima.x[0]
     logR_delta = np.append(0.0, minima.x[1:] + hyb.omega_mean*minima.x[0]/2)
     if len(PN.PhyParas) == 12:
@@ -695,7 +696,7 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
         PN.PhyParas = np.append(PN.PhyParas, logR_delta)
     PN.Physical_to_Parameterize(hyb)
     R_delta = np.exp(quaternion.from_float_array(logR_delta))
-    
+
     W_PN.t = W_PN.t - t_delta
     W_NR = scri.rotate_physical_system(W_NR, R_delta)
     chiA = R_delta*chiA*R_delta.conjugate()
@@ -704,11 +705,9 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
     print("SquaredError over matching window: ",SquaredError(W_NR, W_PN, hyb.t_start, hyb.t_start + hyb.length))
     if cce_dir2 == None:
         print(minima12D)
-    
-    
+
     # Stitch PN and NR waveforms
     w_H = Stitch(W_PN, W_NR, hyb)
-
 
     # Plot results
     if debug:
@@ -743,30 +742,29 @@ def Hybridize(WaveformType, t_end, sim_dir, cce_dir, out_name, length, nOrbits, 
         ax3.axvline(t_end0, linestyle='dotted')
         fig.savefig( "hybridCheckResults")
         fig.clf()
-    
+
     if cce_dir2 == None:
         Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits)    
         return W_NR, W_PN, W_H, minima12D
     else:
         return W_NR, W_PN
 
-#@profile
+# @profile
 def MyHybridize(cce_dir, hyb, PN, OptimizePNParas = 0, truncate = None, verbose = False):
     """
     Align and hybridize given NR waveform with PN waveform.
     """   
-    
+
     abd, t0 = get_abd(cce_dir, truncate)
-    
+
     # BMS tranformations
     W_NR = fix_BMS(abd, hyb, PN)
     if verbose:
         print("After BMS")
-    
+
     # Get matching window
     hyb.get_window_NR(W_NR)
 
- 
     # Optimize parameters
     if hyb.PNIter == 0:
         PN.Parameterize_to_Physical(hyb)
@@ -785,7 +783,7 @@ def MyHybridize(cce_dir, hyb, PN, OptimizePNParas = 0, truncate = None, verbose 
         else:
             PN.PhyParas = np.append(PN.PhyParas, logR_delta)
         PN.Physical_to_Parameterize(hyb)
-        
+
         scale = np.array([0.05,0.02,0.1,0.1,np.pi*2,np.pi*2,np.pi,np.pi/4,np.pi/hyb.omega_i/2.0,np.pi/4,np.pi/4,np.pi/4])
         if np.linalg.norm(PN.chi1_i)<1e-4 or np.linalg.norm(PN.chi2_i)<1e-4:
             scale[7] = 1e-5
@@ -802,17 +800,16 @@ def MyHybridize(cce_dir, hyb, PN, OptimizePNParas = 0, truncate = None, verbose 
         minima12D.jac = approx_fprime(minima12D.x, Optimize12D, np.full_like(minima12D.x, 1.49e-8), PN, hyb)
         if minima12D.success == False:
             print("12-D Optimization doesn't converge.")
-            
+
         PN.OptParas = minima12D.x
         PN.Parameterize_to_Physical(hyb)
-    
-    
+
     if verbose:
         print("After optimal")
     # Get aligned NR and PN waveforms
     hyb.t_PNStart, hyb.t_PNEnd = -8000, 1000 - hyb.t_start
     minima, W_PN, chiA, chiB = Align(PN, hyb)
-    
+
     t_delta = minima.x[0]
     logR_delta = np.append(0.0, minima.x[1:] + hyb.omega_mean*minima.x[0]/2)
     if len(PN.PhyParas) == 12:
@@ -822,59 +819,59 @@ def MyHybridize(cce_dir, hyb, PN, OptimizePNParas = 0, truncate = None, verbose 
         PN.PhyParas = np.append(PN.PhyParas, logR_delta)
     PN.Physical_to_Parameterize(hyb)
     R_delta = np.exp(quaternion.from_float_array(logR_delta))
-    
+
     W_PN.t = W_PN.t - t_delta
     W_NR = scri.rotate_physical_system(W_NR, R_delta)
     chiA = R_delta*chiA*R_delta.conjugate()
     chiB = R_delta*chiB*R_delta.conjugate()
 
     print("SquaredError over matching window: ",SquaredError(W_NR, W_PN, hyb.t_start, hyb.t_start + hyb.length))
-    
+
     return W_NR, W_PN, minima12D
-  
+
 ## Run the code
-#import os
-#import argparse
+# import os
+# import argparse
 #
-#parser = argparse.ArgumentParser()
-#parser.add_argument('--WaveformType', default='cce',help='cce for CCE waveform, and extrapolated for extrapolated waveform')
-#parser.add_argument('--t',type=float, default=-7000.0,help='End time of matching window')
-#parser.add_argument('--SimDir', default='/panfs/ds09/sxs/dzsun/SimAnnex/Public/HybTest/015/Lev3',help='Path in which to find the extropolated waveform data')
-#parser.add_argument('--CCEDir', default='/home/dzsun/CCEAnnex/Public/HybTest/015_CCE/Lev3/CCE',help='Path in which to find the CCE waveform data')
-#parser.add_argument('--OutName', default='Output.npz',help='Path in which to output results')
-#parser.add_argument('--length',type=float, default=5000.0,help='Length of matching window')
-#parser.add_argument('--nOrbits',type=float, default=None,help='Length of matching window in orbits, will disable "length" option if not None')
-#parser.add_argument('--truncate',nargs=2,type=float, default=None,help='--truncate t1 t2. If specified, it will truncate the abd object and keep only data between t1 and t2')
-#parser.add_argument('--CCEDir2', default=None,help='Path in which to find the second CCE waveform data')
-#args = vars(parser.parse_args())
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--WaveformType', default='cce',help='cce for CCE waveform, and extrapolated for extrapolated waveform')
+# parser.add_argument('--t',type=float, default=-7000.0,help='End time of matching window')
+# parser.add_argument('--SimDir', default='/panfs/ds09/sxs/dzsun/SimAnnex/Public/HybTest/015/Lev3',help='Path in which to find the extropolated waveform data')
+# parser.add_argument('--CCEDir', default='/home/dzsun/CCEAnnex/Public/HybTest/015_CCE/Lev3/CCE',help='Path in which to find the CCE waveform data')
+# parser.add_argument('--OutName', default='Output.npz',help='Path in which to output results')
+# parser.add_argument('--length',type=float, default=5000.0,help='Length of matching window')
+# parser.add_argument('--nOrbits',type=float, default=None,help='Length of matching window in orbits, will disable "length" option if not None')
+# parser.add_argument('--truncate',nargs=2,type=float, default=None,help='--truncate t1 t2. If specified, it will truncate the abd object and keep only data between t1 and t2')
+# parser.add_argument('--CCEDir2', default=None,help='Path in which to find the second CCE waveform data')
+# args = vars(parser.parse_args())
 #
 #
-#clock_start = time.time()
-#WaveformType = args['WaveformType']
-#t_end = args['t']
-#data_dir = args['SimDir']
-#cce_dir = args['CCEDir']
-#cce_dir2 = args['CCEDir2']
-#out_name = args['OutName']
-#length = np.array(args['length'])
-#nOrbits = args['nOrbits']
-#truncate = args['truncate']
-#OptArg = 1
-#maxiter = 30
+# clock_start = time.time()
+# WaveformType = args['WaveformType']
+# t_end = args['t']
+# data_dir = args['SimDir']
+# cce_dir = args['CCEDir']
+# cce_dir2 = args['CCEDir2']
+# out_name = args['OutName']
+# length = np.array(args['length'])
+# nOrbits = args['nOrbits']
+# truncate = args['truncate']
+# OptArg = 1
+# maxiter = 30
 #
-#if WaveformType == 'cce':
+# if WaveformType == 'cce':
 #    abd, t0 = get_abd(cce_dir, truncate)
 #    if nOrbits != None:
 #        length = get_length_from_abd(abd, nOrbits, t_end)
-#else:
+# else:
 #    W_NR, t0, length = get_extrapolated_NR(data_dir, nOrbits, t_end, length)
 #    maxiter = 0
-#if cce_dir2 != None:
+# if cce_dir2 != None:
 #    maxiter = 0
-#    
-#hyb = hyb_quantites(t_end, length)
-#PN = PNParameters(data_dir, hyb, t0)
-#if os.path.exists(out_name):
+#
+# hyb = hyb_quantites(t_end, length)
+# PN = PNParameters(data_dir, hyb, t0)
+# if os.path.exists(out_name):
 #    Checkpoint = np.load(out_name, allow_pickle=True)
 #    hyb.PNIter = Checkpoint['checkpoint'][0]
 #    hyb.cost = Checkpoint['checkpoint'][1]
@@ -886,18 +883,18 @@ def MyHybridize(cce_dir, hyb, PN, OptimizePNParas = 0, truncate = None, verbose 
 #    PN.frame_i = Checkpoint['checkpoint'][7]
 #    PN.OptParas = Checkpoint['OptParas']
 #    PN.PhyParas = Checkpoint['PhyParas']
-#    
-#if hyb.PNIter>maxiter:
+#
+# if hyb.PNIter>maxiter:
 #    hyb.PNIter = 10
-#while hyb.PNIter<=maxiter:
+# while hyb.PNIter<=maxiter:
 #    print("PNIter=: ", hyb.PNIter)
 #    W_NR, W_PN, W_H, minima12D = Hybridize(WaveformType, t_end, data_dir, cce_dir, out_name, length, nOrbits, hyb, PN, debug=0, OptimizePNParas=OptArg, truncate=truncate, cce_dir2=cce_dir2)
-#    
+#
 #    if hyb.PNIter >= 2 and abs(hyb.cost[-1]-hyb.cost[-2])/hyb.cost[-1]<1e-2 and abs(hyb.cost[-1]-hyb.cost[-3])/hyb.cost[-1]<1e-2:
 #        hyb.PNIter = maxiter + 1
 #    else:
 #        hyb.PNIter += 1
-#    
-## Output results 
-#Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits)
-#print("All done, total time:", time.time()-clock_start)
+#
+## Output results
+# Output(out_name, W_NR, W_PN, W_H, minima12D, PN, hyb, nOrbits)
+# print("All done, total time:", time.time()-clock_start)
