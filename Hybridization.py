@@ -755,7 +755,8 @@ def MyHybridize(cce_dir, hyb, PN, OptimizePNParas = 0, truncate = None, verbose 
     Align and hybridize given NR waveform with PN waveform.
     """   
 
-    abd, t0 = get_abd(cce_dir, truncate)
+    abd_original, t0 = get_abd(cce_dir, truncate)
+    abd = abd_original.interpolate(abd_original.t[::10])
 
     # BMS tranformations
     W_NR = fix_BMS(abd, hyb, PN)
