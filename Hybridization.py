@@ -348,14 +348,14 @@ def get_length_from_abd(abd, nOrbits, t_end):
 # @profile
 def fix_BMS(abd, hyb, PN):    
     if hyb.PNIter == 0: 
-        abd_prime, trans, abd_err = abd.map_to_superrest_frame(t_0=hyb.t_start+hyb.length/2)
-        # res = scri.bms_transformations.BMSTransformation()
-        # res.from_file("full_bms.h5")
-        # abd_prime = abd.transform(
-        #     supertranslation=res.supertranslation,
-        #     frame_rotation=res.frame_rotation.components,
-        #     boost_velocity=res.boost_velocity,
-        # )
+        # abd_prime, trans, abd_err = abd.map_to_superrest_frame(t_0=hyb.t_start+hyb.length/2)
+        res = scri.bms_transformations.BMSTransformation()
+        res.from_file("bms_first_iteration.h5")
+        abd_prime = abd.transform(
+            supertranslation=res.supertranslation,
+            frame_rotation=res.frame_rotation.components,
+            boost_velocity=res.boost_velocity,
+        )
         W_NR = abd_to_WM(abd_prime)
         W_NR_corot = scri.to_corotating_frame(W_NR.copy())
         ZeroModes = [2,8,16,26,38,52,68]
@@ -368,8 +368,8 @@ def fix_BMS(abd, hyb, PN):
             t_PNStart=hyb.t_PNStart, t_PNEnd=hyb.t_PNEnd
         )
         W_PN.t = W_PN.t*Phys[1]
-        W_PN.data = np.append(0.0*W_PN.data[:,0:4], np.copy(W_PN.data), axis=1)
-        W_PN.ells = 0,8
+        # W_PN.data = np.append(0.0*W_PN.data[:,0:4], np.copy(W_PN.data), axis=1)
+        # W_PN.ells = 0,8
         W_PN.dataType = scri.h
 
         W_PN_PsiM = PostNewtonian.PNWaveform(
