@@ -348,14 +348,14 @@ def get_length_from_abd(abd, nOrbits, t_end):
 # @profile
 def fix_BMS(abd, hyb, PN):    
     if hyb.PNIter == 0: 
-        # abd_prime, trans, abd_err = abd.map_to_superrest_frame(t_0=hyb.t_start+hyb.length/2)
-        res = scri.bms_transformations.BMSTransformation()
-        res.from_file("full_bms.h5")
-        abd_prime = abd.transform(
-            supertranslation=res.supertranslation,
-            frame_rotation=res.frame_rotation.components,
-            boost_velocity=res.boost_velocity,
-        )
+        abd_prime, trans, abd_err = abd.map_to_superrest_frame(t_0=hyb.t_start+hyb.length/2)
+        # res = scri.bms_transformations.BMSTransformation()
+        # res.from_file("full_bms.h5")
+        # abd_prime = abd.transform(
+        #     supertranslation=res.supertranslation,
+        #     frame_rotation=res.frame_rotation.components,
+        #     boost_velocity=res.boost_velocity,
+        # )
         W_NR = abd_to_WM(abd_prime)
         W_NR_corot = scri.to_corotating_frame(W_NR.copy())
         ZeroModes = [2,8,16,26,38,52,68]
